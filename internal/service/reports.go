@@ -20,7 +20,7 @@ func (s *Service) Window(ctx context.Context, id string, from, to int64) (model.
 	}
 	out := []model.Allocation{}
 	for _, v := range a {
-		if v.StartNS < to && v.EndNS > from {
+		if scheduler.InWindow(v, from, to, s.PeriodNS) {
 			out = append(out, v)
 		}
 	}

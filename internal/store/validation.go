@@ -75,12 +75,16 @@ func (s *Store) Commit(ctx context.Context, network, id string) error {
 			return model.ErrNotReady
 		}
 		var current string
-		err := tx.QueryRowContext(ctx, `SELECT draft_id FROM active_versions WHERE network_id=?`, network).Scan(&current)
+		var currentVersion int64
+		err := tx.QueryRowContext(ctx, `SELECT draft_id,version FROM active_versions WHERE network_id=?`, network).Scan(&current, &currentVersion)
 		if err == nil && current == id {
 			return nil
 		}
 		if err != nil && err != sql.ErrNoRows {
 			return err
+		}
+		if err == nil && d.Version <= currentVersion {
+			return model.ErrConflict
 		}
 		now := text(time.Now().UTC())
 		_, err = tx.ExecContext(ctx, `INSERT INTO active_versions(network_id,draft_id,version,updated_at) VALUES(?,?,?,?) ON CONFLICT(network_id) DO UPDATE SET draft_id=excluded.draft_id,version=excluded.version,updated_at=excluded.updated_at`, network, id, d.Version, now)
