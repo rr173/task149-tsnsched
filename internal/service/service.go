@@ -25,12 +25,18 @@ type Service struct {
 func New(d *store.Store) *Service {
 	return &Service{Data: d, PeriodNS: 1_000_000, Guard: scheduler.Config{NetworkPeriodNS: 1_000_000, GuardBeforeNS: 100, GuardAfterNS: 100}}
 }
+// Recover rebuilds the in-memory topology index from the persisted nodes,
+// ports and links via the store's database recovery read. It is the state
+// rebuild half of the reload boundary: it reads committed topology and swaps
+// it atomically into s.Graph under the mutex so concurrent GraphSnapshot()
+// readers observe either the previous or the rebuilt graph, never an empty
+// half-built one. It performs no writes, so committed drafts and the
+// active_versions table are left untouched.
 func (s *Service) Recover(ctx context.Context) error {
 	g, e := s.Data.Graph(ctx)
 	if e != nil {
 		return e
 	}
-	s.Graph = topology.New()
 	s.mu.Lock()
 	s.Graph = g
 	s.mu.Unlock()

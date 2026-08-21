@@ -6,6 +6,12 @@ import (
 	"example.com/task149/tsnsched/internal/topology"
 )
 
+// Graph reconstructs the in-memory topology index from the persisted nodes,
+// ports and links. It is the database recovery read used by state rebuild
+// (service.Recover) and the reload entrypoint (service.Reload). It must return
+// the freshly built graph so persisted topology is rehydrated into memory;
+// callers that mutate committed/active state are responsible for leaving the
+// active_versions table untouched.
 func (s *Store) Graph(ctx context.Context) (*topology.Graph, error) {
 	n, e := s.Nodes(ctx)
 	if e != nil {
@@ -19,8 +25,7 @@ func (s *Store) Graph(ctx context.Context) (*topology.Graph, error) {
 	if e != nil {
 		return nil, e
 	}
-	_ = topology.Build(n, p, l)
-	return topology.New(), nil
+	return topology.Build(n, p, l), nil
 }
 func (s *Store) Summary(ctx context.Context, id string) (model.ScheduleSummary, error) {
 	d, e := s.GetDraft(ctx, id)

@@ -14,10 +14,14 @@ func (s *Service) Health(ctx context.Context) map[string]any {
 	return result
 }
 
+// Reload is the reload entrypoint of the TSN state-reload boundary. A reload
+// must rehydrate the in-memory topology index (and keep already-committed
+// active versions queryable) purely from the database; it must not promote or
+// delete uncommitted drafts, and it must not touch the active_versions table.
+// Earlier versions called Rollback("n") here, which deleted the committed
+// active version for the hard-coded network "n" — destroying committed state
+// on every reload. Reload now only rebuilds the graph via Recover.
 func (s *Service) Reload(ctx context.Context) error {
-	if err := s.Data.Rollback(ctx, "n"); err != nil {
-		return err
-	}
 	return s.Recover(ctx)
 }
 
