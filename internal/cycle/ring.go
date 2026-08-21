@@ -29,7 +29,10 @@ func Split(start, duration, period int64) []Segment {
 	if end <= period {
 		return []Segment{{start, end}}
 	}
-	return []Segment{{start, period}}
+	// The occupancy crosses the period boundary: the tail wraps around to the
+	// start of the next cycle. Both segments must be returned so ring-aware
+	// overlap/conflict/gap checks see the wrap-around occupancy.
+	return []Segment{{start, period}, {0, end - period}}
 }
 func Overlap(a, b []Segment) bool {
 	for _, x := range a {

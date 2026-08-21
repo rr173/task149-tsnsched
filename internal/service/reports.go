@@ -20,7 +20,11 @@ func (s *Service) Window(ctx context.Context, id string, from, to int64) (model.
 	}
 	out := []model.Allocation{}
 	for _, v := range a {
-		if v.StartNS < to && v.EndNS > from {
+		// Route through scheduler.InWindow so the window query honors the same
+		// ring semantics as conflict/gap/capacity checks: an occupancy whose
+		// tail wraps from the end of one cycle to the start of the next must be
+		// returned when the query window sits at the cycle start.
+		if scheduler.InWindow(v, from, to, s.PeriodNS) {
 			out = append(out, v)
 		}
 	}
