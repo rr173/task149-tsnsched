@@ -49,7 +49,7 @@ func (p *Planner) Plan(streams []model.Stream, draft string) ([]model.Allocation
 				first = cursor
 			}
 			end := start + duration
-			a := model.Allocation{ID: fmt.Sprintf("%s-%d", s.ID, i), DraftID: draft, StreamID: s.ID, LinkID: l.ID, PortID: s.PathPorts[i], StartNS: start, EndNS: end, GuardBeforeNS: p.Config.GuardBeforeNS, GuardAfterNS: p.Config.GuardAfterNS, ArrivalNS: cursor, DepartureNS: cursor + duration}
+			a := model.Allocation{ID: fmt.Sprintf("%s-%s-%d", s.ID, draft, i), DraftID: draft, StreamID: s.ID, LinkID: l.ID, PortID: s.PathPorts[i], StartNS: start, EndNS: end, GuardBeforeNS: p.Config.GuardBeforeNS, GuardAfterNS: p.Config.GuardAfterNS, ArrivalNS: cursor, DepartureNS: cursor + duration}
 			alloc = append(alloc, a)
 			cursor += duration + l.PropagationNS
 			if i == len(links)-1 {

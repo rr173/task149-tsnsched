@@ -4,12 +4,33 @@ import (
 	"context"
 	"database/sql"
 	"example.com/task149/tsnsched/internal/model"
+	"fmt"
 	"time"
 )
 
 func (s *Store) SaveValidation(ctx context.Context, r model.ValidationResult) error {
+	// Validation evidence must be bound to a concrete draft version. A missing
+	// id means the caller never bound the result to a draft; persisting it onto a
+	// shared sentinel would let later drafts overwrite earlier evidence and leave
+	// every real draft looking unvalidated. Reject instead of substituting an id.
 	if r.DraftID == "" {
-		r.DraftID = "unbound"
+		return model.ErrInvalid
+	}
+	// Stamp the violations with the bound draft id so they are queryable by the
+	// same key as the result row and never leak onto a sibling version's record.
+	for i := range r.Violations {
+		if r.Violations[i].DraftID == "" {
+			r.Violations[i].DraftID = r.DraftID
+		}
+		if r.Violations[i].ID == "" {
+			r.Violations[i].ID = fmt.Sprintf("violation-%s-%d", r.DraftID, i)
+		}
+		if r.Violations[i].CreatedAt.IsZero() {
+			r.Violations[i].CreatedAt = r.CheckedAt
+		}
+	}
+	if r.CheckedAt.IsZero() {
+		r.CheckedAt = time.Now().UTC()
 	}
 	return s.Tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM violations WHERE draft_id=?`, r.DraftID); err != nil {
@@ -73,8 +94,17 @@ func (s *Store) Commit(ctx context.Context, network, id string) error {
 		if d.NetworkID != network || st == string(model.Rejected) {
 			return model.ErrConflict
 		}
+		// The commit gate reads only this draft version's own persisted evidence.
+		// A missing or invalid row means the version was never validated (or its
+		// evidence was never bound to its id), so the commit must not proceed.
 		var valid int
-		if err := tx.QueryRowContext(ctx, `SELECT valid FROM validation_results WHERE draft_id=?`, id).Scan(&valid); err != nil || valid == 0 {
+		var checkedAt string
+		switch err := tx.QueryRowContext(ctx, `SELECT valid,checked_at FROM validation_results WHERE draft_id=?`, id).Scan(&valid, &checkedAt); {
+		case err == sql.ErrNoRows:
+			return model.ErrNotReady
+		case err != nil:
+			return err
+		case valid == 0 || checkedAt == "":
 			return model.ErrNotReady
 		}
 		var current string

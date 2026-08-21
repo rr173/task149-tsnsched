@@ -78,6 +78,9 @@ func (s *Service) CreateDraft(ctx context.Context, network string, version int64
 		return model.ScheduleSummary{}, e
 	}
 	r := validator.New(s.PeriodNS).Check(alloc, streams, seed)
+	// Bind the validation evidence to this exact draft version so it is
+	// queryable by draft id and cannot be overwritten onto a shared sentinel.
+	r.DraftID = id
 	r.CheckedAt = time.Now().UTC()
 	_ = s.Data.RecordAudit(ctx, "draft_validated", id, fmt.Sprintf("valid=%t violations=%d", r.Valid, len(r.Violations)))
 	if e = s.Data.SaveValidation(ctx, r); e != nil {
