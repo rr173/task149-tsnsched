@@ -48,7 +48,10 @@ func (s *Service) AddPort(ctx context.Context, p model.Port) error {
 	return s.Recover(ctx)
 }
 func (s *Service) AddLink(ctx context.Context, l model.Link) error {
-	return s.Data.PutLink(ctx, l)
+	if err := s.Data.PutLink(ctx, l); err != nil {
+		return err
+	}
+	return s.Recover(ctx)
 }
 func (s *Service) AddStream(ctx context.Context, v model.Stream) error {
 	return s.Data.PutStream(ctx, v)

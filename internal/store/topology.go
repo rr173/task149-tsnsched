@@ -33,7 +33,12 @@ func (s *Store) PutLink(ctx context.Context, l model.Link) error {
 	if l.CreatedAt.IsZero() {
 		l.CreatedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO links VALUES(?,?,?,?,?,?,?)`, l.ID, l.FromPort, l.ToPort, l.PropagationNS, l.PeriodNS, yes(l.Enabled), text(l.CreatedAt))
+	// Upsert so re-pointing an existing link id (changing from_port/to_port
+	// and the other fields) actually persists. INSERT OR IGNORE would silently
+	// keep the old endpoints once the id already exists, leaving the persisted
+	// topology stale. created_at is intentionally not overwritten, mirroring
+	// PutNode/PutPort.
+	_, err := s.db.ExecContext(ctx, `INSERT INTO links VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET from_port=excluded.from_port,to_port=excluded.to_port,propagation_ns=excluded.propagation_ns,period_ns=excluded.period_ns,enabled=excluded.enabled`, l.ID, l.FromPort, l.ToPort, l.PropagationNS, l.PeriodNS, yes(l.Enabled), text(l.CreatedAt))
 	return fmtErr("put link", err)
 }
 func (s *Store) PutStream(ctx context.Context, v model.Stream) error {

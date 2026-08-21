@@ -36,15 +36,45 @@ func (g *Graph) AddLink(l model.Link) error {
 	if err := l.Validate(); err != nil {
 		return err
 	}
-	if _, exists := g.Links[l.ID]; exists { return nil }
 	a, aok := g.Ports[l.FromPort]
 	b, bok := g.Ports[l.ToPort]
 	if !aok || !bok || a.NodeID == b.NodeID {
 		return fmt.Errorf("link endpoints invalid")
 	}
+	// Re-pointing an existing link id (different from_port/to_port or other
+	// fields) must replace the prior entry rather than be silently dropped.
+	// Keeping the stale direction would let downstream path validation accept a
+	// directed edge that the database no longer holds. Rebuild the Out index for
+	// the affected source ports so the old direction does not linger.
+	if prev, exists := g.Links[l.ID]; exists {
+		g.removeOut(prev)
+	}
 	g.Links[l.ID] = l
 	g.Out[l.FromPort] = append(g.Out[l.FromPort], l)
 	return nil
+}
+// removeOut drops any entries in Out that point at link id l.ID. AddLink uses it
+// when a link id is re-added with a new direction so the old directed edge is
+// not retained alongside the new one.
+func (g *Graph) removeOut(l model.Link) {
+	srcs := []string{l.FromPort}
+	if prev, ok := g.Links[l.ID]; ok && prev.FromPort != l.FromPort {
+		srcs = append(srcs, prev.FromPort)
+	}
+	for _, src := range srcs {
+		cur := g.Out[src]
+		next := cur[:0]
+		for _, e := range cur {
+			if e.ID != l.ID {
+				next = append(next, e)
+			}
+		}
+		if len(next) == 0 {
+			delete(g.Out, src)
+		} else {
+			g.Out[src] = next
+		}
+	}
 }
 func (g *Graph) LinkBetween(from, to string) (model.Link, bool) {
 	for _, l := range g.Out[from] {
