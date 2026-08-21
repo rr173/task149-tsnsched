@@ -11,7 +11,7 @@ type Validator struct{ PeriodNS int64 }
 func New(period int64) Validator { return Validator{PeriodNS: period} }
 func (v Validator) Check(alloc []model.Allocation, streams []model.Stream, seed []model.Violation) model.ValidationResult {
 	r := model.ValidationResult{Valid: true, Violations: append([]model.Violation{}, seed...)}
-	if len(alloc) > 1 { r.Violations = append(r.Violations, scheduler.DetectConflicts(alloc, v.PeriodNS+1)...) }
+	if len(alloc) > 1 { r.Violations = append(r.Violations, scheduler.DetectConflicts(alloc, v.PeriodNS)...) }
 	by := map[string]model.Stream{}
 	for _, s := range streams {
 		by[s.ID] = s

@@ -33,10 +33,16 @@ func Capacity(allocations []model.Allocation, period int64) CapacityReport {
 	sort.Strings(ports)
 	report := CapacityReport{PeriodNS: period, Ports: make([]PortLoad, 0, len(ports))}
 	for _, port := range ports {
-		reserved := int64(0)
+		// Account for the reserved range (slot + guard bands) the same way
+		// SlotGaps and conflict detection do: merge the expanded segments so
+		// overlapping guard bands are not double-counted, then measure the
+		// unioned width. This keeps capacity analysis on the same reserved
+		// range the rest of the pipeline enforces.
+		expanded := make([]cycle.Segment, 0, len(byPort[port]))
 		for _, a := range byPort[port] {
-			reserved += cycle.Width(cycle.Split(a.StartNS, a.EndNS-a.StartNS, period))
+			expanded = append(expanded, cycle.Reserved(a.StartNS, a.EndNS-a.StartNS, period, cycle.Guard{Before: a.GuardBeforeNS, After: a.GuardAfterNS})...)
 		}
+		reserved := cycle.Width(cycle.Merge(expanded))
 		load := PortLoad{PortID: port, PeriodNS: period, ReservedNS: reserved, Allocations: len(byPort[port])}
 		if period > 0 {
 			load.Utilization = float64(reserved) / float64(period)
@@ -60,7 +66,7 @@ func Feasible(report CapacityReport) bool {
 func SlotGaps(items []model.Allocation, period int64) []cycle.Segment {
 	occupied := []cycle.Segment{}
 	for _, a := range items {
-		occupied = append(occupied, cycle.Expand(a.StartNS, a.EndNS-a.StartNS, period, cycle.Guard{Before: a.GuardBeforeNS, After: a.GuardAfterNS})...)
+		occupied = append(occupied, cycle.Reserved(a.StartNS, a.EndNS-a.StartNS, period, cycle.Guard{Before: a.GuardBeforeNS, After: a.GuardAfterNS})...)
 	}
 	occupied = cycle.Merge(occupied)
 	gaps := []cycle.Segment{}

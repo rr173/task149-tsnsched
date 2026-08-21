@@ -23,7 +23,7 @@ func InWindow(a model.Allocation, from, to, period int64) bool {
 		return true
 	}
 	window := cycle.Split(from, to-from, period)
-	occupied := cycle.Expand(a.StartNS, a.EndNS-a.StartNS, period, cycle.Guard{Before: a.GuardBeforeNS, After: a.GuardAfterNS})
+	occupied := cycle.Reserved(a.StartNS, a.EndNS-a.StartNS, period, cycle.Guard{Before: a.GuardBeforeNS, After: a.GuardAfterNS})
 	return cycle.Overlap(window, occupied)
 }
 
