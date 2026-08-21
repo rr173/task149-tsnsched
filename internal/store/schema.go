@@ -1,0 +1,14 @@
+package store
+
+const schema = `
+CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,name TEXT NOT NULL,clock_domain TEXT NOT NULL,enabled INTEGER NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ports(id TEXT PRIMARY KEY,node_id TEXT NOT NULL,name TEXT NOT NULL,direction TEXT NOT NULL,rate_bits INTEGER NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS links(id TEXT PRIMARY KEY,from_port TEXT NOT NULL,to_port TEXT NOT NULL,propagation_ns INTEGER NOT NULL,period_ns INTEGER NOT NULL,enabled INTEGER NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS streams(id TEXT PRIMARY KEY,name TEXT NOT NULL,period_ns INTEGER NOT NULL,frame_bits INTEGER NOT NULL,release_ns INTEGER NOT NULL,deadline_ns INTEGER NOT NULL,max_jitter_ns INTEGER NOT NULL,path_json TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS drafts(id TEXT PRIMARY KEY,network_id TEXT NOT NULL,version INTEGER NOT NULL,status TEXT NOT NULL,period_ns INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(network_id,version));
+CREATE TABLE IF NOT EXISTS allocations(id TEXT PRIMARY KEY,draft_id TEXT NOT NULL,stream_id TEXT NOT NULL,link_id TEXT NOT NULL,port_id TEXT NOT NULL,start_ns INTEGER NOT NULL,end_ns INTEGER NOT NULL,guard_before_ns INTEGER NOT NULL,guard_after_ns INTEGER NOT NULL,arrival_ns INTEGER NOT NULL,departure_ns INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS allocations_draft_port ON allocations(draft_id,port_id);
+CREATE TABLE IF NOT EXISTS violations(id TEXT PRIMARY KEY,draft_id TEXT NOT NULL,kind TEXT NOT NULL,stream_a TEXT NOT NULL,stream_b TEXT NOT NULL,port_id TEXT NOT NULL,detail TEXT NOT NULL,resolved INTEGER NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS active_versions(network_id TEXT PRIMARY KEY,draft_id TEXT NOT NULL,version INTEGER NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS validation_results(draft_id TEXT PRIMARY KEY,valid INTEGER NOT NULL,checked_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);`
