@@ -29,7 +29,7 @@ func Split(start, duration, period int64) []Segment {
 	if end <= period {
 		return []Segment{{start, end}}
 	}
-	return []Segment{{start, period}}
+	return []Segment{{start, period}, {0, end - period}}
 }
 func Overlap(a, b []Segment) bool {
 	for _, x := range a {

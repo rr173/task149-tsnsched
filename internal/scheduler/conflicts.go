@@ -17,7 +17,7 @@ func DetectConflicts(alloc []model.Allocation, period int64) []model.Violation {
 			}
 			ag := cycle.Guard{Before: a.GuardBeforeNS, After: a.GuardAfterNS}
 			bg := cycle.Guard{Before: b.GuardBeforeNS, After: b.GuardAfterNS}
-			if cycle.Overlap(cycle.Split(a.StartNS, a.EndNS-a.StartNS, period), cycle.Split(b.StartNS, b.EndNS-b.StartNS, period)) {
+			if cycle.Overlap(cycle.Expand(a.StartNS, a.EndNS-a.StartNS, period, ag), cycle.Expand(b.StartNS, b.EndNS-b.StartNS, period, bg)) {
 				out = append(out, model.Violation{ID: fmt.Sprintf("conflict-%s-%s", a.ID, b.ID), Kind: model.Conflict, StreamA: a.StreamID, StreamB: b.StreamID, PortID: a.PortID, Detail: fmt.Sprintf("overlapping ring slots %d/%d", a.StartNS, b.StartNS), CreatedAt: time.Now().UTC()})
 			}
 		}

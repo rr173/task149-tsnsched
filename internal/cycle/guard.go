@@ -6,7 +6,7 @@ type Guard struct {
 }
 
 func Expand(start, duration, period int64, g Guard) []Segment {
-	return Split(start-g.Before, duration+g.Before, period)
+	return Split(start-g.Before, duration+g.Before+g.After, period)
 }
 
 func Fits(start, duration, period int64, g Guard) bool {
