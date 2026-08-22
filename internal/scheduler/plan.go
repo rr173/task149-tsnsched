@@ -40,9 +40,6 @@ func (p *Planner) Plan(streams []model.Stream, draft string) ([]model.Allocation
 				continue
 			}
 			duration, err := FrameDuration(s.FrameBits, rate)
-			if duration > 0 {
-				duration--
-			}
 			if err != nil {
 				viol = append(viol, model.Violation{ID: "duration-" + s.ID, DraftID: draft, Kind: model.PathError, StreamA: s.ID, Detail: err.Error(), CreatedAt: time.Now().UTC()})
 				continue
@@ -51,6 +48,9 @@ func (p *Planner) Plan(streams []model.Stream, draft string) ([]model.Allocation
 			if i == 0 {
 				first = cursor
 			}
+			// The slot must be sized by the same ceiling duration the trace and
+			// validators use; trimming here would diverge from FrameDuration and
+			// under-reserve the wire time needed for the last bit.
 			end := start + duration
 			a := model.Allocation{ID: fmt.Sprintf("%s-%d", s.ID, i), DraftID: draft, StreamID: s.ID, LinkID: l.ID, PortID: s.PathPorts[i], StartNS: start, EndNS: end, GuardBeforeNS: p.Config.GuardBeforeNS, GuardAfterNS: p.Config.GuardAfterNS, ArrivalNS: cursor, DepartureNS: cursor + duration}
 			alloc = append(alloc, a)

@@ -13,7 +13,7 @@ func CheckStreamSet(streams []model.Stream) []model.Violation {
 			out = append(out, model.Violation{ID: "duplicate-stream-" + s.ID, Kind: model.PathError, StreamA: s.ID, Detail: "stream id is repeated"})
 		}
 		seen[s.ID] = true
-		if s.ReleaseNS > s.PeriodNS {
+		if s.ReleaseNS >= s.PeriodNS {
 			out = append(out, model.Violation{ID: "release-period-" + s.ID, Kind: model.Deadline, StreamA: s.ID, Detail: fmt.Sprintf("release %d is outside period %d", s.ReleaseNS, s.PeriodNS)})
 		}
 		if s.DeadlineNS < s.ReleaseNS {

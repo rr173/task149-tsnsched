@@ -27,7 +27,17 @@ func FrameDuration(frameBits, rateBits int64) (int64, error) {
 	if frameBits <= 0 || rateBits <= 0 {
 		return 0, fmt.Errorf("frame and rate must be positive")
 	}
-	return frameBits * 1_000_000_000 / rateBits, nil
+	// Duration is measured in whole nanoseconds and must hold every bit of the
+	// frame. When the port rate does not evenly divide the frame bit count, the
+	// exact wire time is fractional; truncating to the quotient would reserve a
+	// slot too short to carry the last bit. Round up to the smallest integral
+	// number of nanoseconds whose product with the rate covers the full frame.
+	num := frameBits * 1_000_000_000
+	q := num / rateBits
+	if num%rateBits != 0 {
+		q++
+	}
+	return q, nil
 }
 
 func BuildTrace(stream model.Stream, links []model.Link, rates []int64, period int64) (TimingTrace, error) {
