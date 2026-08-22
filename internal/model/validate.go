@@ -37,4 +37,9 @@ func (s Stream) Validate() error {
 	}
 	return nil
 }
-func (d ScheduleDraft) CanCommit() bool { return d.Status == Validated || d.Status == Committed }
+// CanCommit reports whether a draft is in a state that may enter the commit gate.
+// Only Validated drafts may enter; Committed/Rejected/RolledBack are finished and
+// must not re-enter. The idempotent re-commit of the *current* active version is
+// the sole exception, and it is enforced atomically inside Store.Commit against
+// the active pointer, not by this per-row helper.
+func (d ScheduleDraft) CanCommit() bool { return d.Status == Validated }

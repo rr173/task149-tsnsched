@@ -10,7 +10,12 @@ func (s *Service) CanCommit(ctx context.Context, id string) bool {
 	if e != nil {
 		return false
 	}
-	return d.Status == model.Validated || d.Status == model.Committed
+	// Only Validated drafts may enter the commit gate. A finished draft
+	// (Committed/RolledBack/Rejected) must not re-enter; the idempotent
+	// re-commit of the *current* active version is the sole exception and is
+	// enforced atomically inside Store.Commit against the active pointer, so
+	// this gate stays intentionally narrow.
+	return d.Status == model.Validated
 }
 func (s *Service) CommitIfValid(ctx context.Context, network, id string) (model.ActiveVersion, error) {
 	if !s.CanCommit(ctx, id) {

@@ -67,8 +67,13 @@ func (s *Store) Commit(ctx context.Context, network, id string) error {
 		d.Status = model.Status(st)
 		d.CreatedAt, _ = parse(created)
 		d.UpdatedAt, _ = parse(updated)
-		if d.NetworkID != network || st == string(model.Rejected) {
+		if d.NetworkID != network {
 			return model.ErrConflict
+		}
+		// Draft lifecycle gate: only Validated (new) or Committed (re-commit) drafts
+		// may pass. Rejected/RolledBack are finished and must never re-enter the gate.
+		if d.Status != model.Validated && d.Status != model.Committed {
+			return model.ErrNotReady
 		}
 		var valid int
 		if err := tx.QueryRowContext(ctx, `SELECT valid FROM validation_results WHERE draft_id=?`, id).Scan(&valid); err != nil || valid == 0 {
@@ -76,14 +81,29 @@ func (s *Store) Commit(ctx context.Context, network, id string) error {
 		}
 		var current string
 		var currentVersion int64
+		hasActive := true
 		err := tx.QueryRowContext(ctx, `SELECT draft_id,version FROM active_versions WHERE network_id=?`, network).Scan(&current, &currentVersion)
-		if err == nil && current == id {
-			return nil
-		}
-		if err != nil && err != sql.ErrNoRows {
+		if err == sql.ErrNoRows {
+			hasActive = false
+		} else if err != nil {
 			return err
 		}
-		_ = currentVersion
+		// Idempotent short-circuit: re-submitting the *current* active version is
+		// a no-op. This is the only path by which a finished (Committed) draft may
+		// re-enter the gate, and it touches neither the active pointer nor status.
+		if hasActive && current == id {
+			return nil
+		}
+		// Version monotonicity: once a newer version is active, an older version
+		// must not become the active version again.
+		if hasActive && d.Version < currentVersion {
+			return model.ErrConflict
+		}
+		// Finished-draft gate: a Committed draft that is *not* the current active
+		// pointer has been superseded or rolled back and must not be re-committed.
+		if d.Status == model.Committed {
+			return model.ErrConflict
+		}
 		now := text(time.Now().UTC())
 		_, err = tx.ExecContext(ctx, `INSERT INTO active_versions(network_id,draft_id,version,updated_at) VALUES(?,?,?,?) ON CONFLICT(network_id) DO UPDATE SET draft_id=excluded.draft_id,version=excluded.version,updated_at=excluded.updated_at`, network, id, d.Version, now)
 		if err != nil {
