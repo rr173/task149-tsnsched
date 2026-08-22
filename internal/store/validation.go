@@ -74,23 +74,52 @@ func (s *Store) Commit(ctx context.Context, network, id string) error {
 		if err := tx.QueryRowContext(ctx, `SELECT valid FROM validation_results WHERE draft_id=?`, id).Scan(&valid); err != nil || valid == 0 {
 			return model.ErrNotReady
 		}
+		// Inspect the active pointer inside the same transaction so the gate is
+		// authoritative: a rejected draft, a stale version, an idempotent
+		// re-commit, and a version swap are all decided here rather than split
+		// across a separate read in the service layer.
 		var current string
 		var currentVersion int64
 		err := tx.QueryRowContext(ctx, `SELECT draft_id,version FROM active_versions WHERE network_id=?`, network).Scan(&current, &currentVersion)
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
-		_ = currentVersion
 		now := text(time.Now().UTC())
-		if _, err = tx.ExecContext(ctx, `UPDATE active_versions SET draft_id=?,version=?,updated_at=? WHERE network_id=?`, id, d.Version, now, network); err != nil {
-			return err
+		switch {
+		case err != sql.ErrNoRows && current == id:
+			// Idempotent re-commit of the version that is already active.
+			// Reuse the existing active pointer; never INSERT again (that
+			// would trip the network_id PRIMARY KEY unique constraint). A
+			// committed draft stays committed.
+			if _, e := tx.ExecContext(ctx, `UPDATE active_versions SET updated_at=? WHERE network_id=?`, now, network); e != nil {
+				return e
+			}
+			if st != string(model.Committed) {
+				if _, e := tx.ExecContext(ctx, `UPDATE drafts SET status='committed',updated_at=? WHERE id=?`, now, id); e != nil {
+					return e
+				}
+			}
+			return nil
+		case err != sql.ErrNoRows && currentVersion >= d.Version:
+			// A different draft is active and its version is not older than
+			// this one: the active-version swap rule forbids regressing, so
+			// reject the commit rather than overwriting the pointer.
+			return model.ErrConflict
+		default:
+			// Either no active version exists yet, or the active version is
+			// strictly older and must be replaced. UPSERT the pointer onto the
+			// network row instead of an unconditional INSERT+UPDATE, so the
+			// network_id PRIMARY KEY is safely reused in both cases.
+			if _, e := tx.ExecContext(ctx, `INSERT INTO active_versions(network_id,draft_id,version,updated_at) VALUES(?,?,?,?) ON CONFLICT(network_id) DO UPDATE SET draft_id=excluded.draft_id,version=excluded.version,updated_at=excluded.updated_at`, network, id, d.Version, now); e != nil {
+				return e
+			}
+			if st != string(model.Committed) {
+				if _, e := tx.ExecContext(ctx, `UPDATE drafts SET status='committed',updated_at=? WHERE id=?`, now, id); e != nil {
+					return e
+				}
+			}
+			return nil
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO active_versions(network_id,draft_id,version,updated_at) VALUES(?,?,?,?)`, network, id, d.Version, now)
-		if err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, `UPDATE drafts SET status='committed',updated_at=? WHERE id=?`, now, id)
-		return err
 	})
 }
 func (s *Store) Active(ctx context.Context, network string) (model.ActiveVersion, error) {

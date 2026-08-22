@@ -118,9 +118,12 @@ func (s *Service) Validate(ctx context.Context, id string) (model.ValidationResu
 	return r, e
 }
 func (s *Service) Commit(ctx context.Context, network, id string) error {
-	if _, err := s.Active(ctx, network); err == nil {
-		return model.ErrConflict
-	}
+	// The active-pointer check is intentionally NOT done here: a draft that is
+	// already the active version must be re-committed idempotently, and a newer
+	// version must still be able to replace the current one. Doing the gate
+	// eagerly would reject both cases with ErrConflict. The store-level
+	// transaction is the single authority: it compares draft id/version inside
+	// the transaction and picks the idempotent, replace, or conflict path.
 	return s.Data.Commit(ctx, network, id)
 }
 func (s *Service) Rollback(ctx context.Context, network string) error {
